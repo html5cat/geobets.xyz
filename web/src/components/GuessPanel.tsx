@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useMemo, useState } from "react";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { formatEther, parseEther, keccak256, encodeAbiParameters, parseAbiParameters, toHex } from "viem";
+import {  parseEther, keccak256, encodeAbiParameters, parseAbiParameters, toHex } from "viem";
 import { GEO_TOKEN_ADDRESS, GEOBETS_GAME_ADDRESS, geoTokenAbi, geoBetsGameAbi } from "@/lib/contracts";
 import { useGameStore } from "@/store/game";
 
@@ -30,7 +30,7 @@ export function GuessPanel() {
     address: GEO_TOKEN_ADDRESS,
     abi: geoTokenAbi,
     functionName: "allowance",
-    args: address ? [address, GEOBETS_GAME_ADDRESS] : undefined as any,
+    args: address ? [address, GEOBETS_GAME_ADDRESS] : undefined as any, // eslint-disable-line @typescript-eslint/no-explicit-any
   });
   // const decimals = 18n;
   const { writeContract, writeContractAsync, data: txHash } = useWriteContract();

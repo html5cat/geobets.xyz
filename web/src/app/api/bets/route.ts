@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { betsQuerySchema, createBetCommitSchema, revealPatchSchema } from "@/lib/validation";
 
 export async function POST(req: NextRequest) {
-  let body: any; try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid_json" }, { status: 400 }); }
+  let body: any; try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid_json" }, { status: 400 }); } // eslint-disable-line @typescript-eslint/no-explicit-any
   const parsed = createBetCommitSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "bad_request", issues: parsed.error.issues }, { status: 400 });
   const { gameId, player, amountWei, commit, commitTx } = parsed.data;
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   const parsed = betsQuerySchema.safeParse(qp);
   if (!parsed.success) return NextResponse.json({ error: "bad_request", issues: parsed.error.issues }, { status: 400 });
   const { player, game } = parsed.data;
-  let whereClauses: any[] = [];
+  const whereClauses: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
   if (player) whereClauses.push(eq(bets.player, player));
   if (game) whereClauses.push(eq(bets.gameId, Number(game)));
   let rows;
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  let body: any; try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid_json" }, { status: 400 }); }
+  let body: any; try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid_json" }, { status: 400 }); } // eslint-disable-line @typescript-eslint/no-explicit-any
   const parsed = revealPatchSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "bad_request", issues: parsed.error.issues }, { status: 400 });
   const { gameId, player, latE6, lonE6, revealTx } = parsed.data;

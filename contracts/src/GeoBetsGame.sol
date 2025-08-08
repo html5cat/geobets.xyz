@@ -78,7 +78,8 @@ contract GeoBetsGame is Ownable {
             solutionLatE6: 0,
             solutionLonE6: 0,
             totalEscrow: 0,
-            host: msg.sender
+            host: msg.sender,
+            participantCount: 0
         });
         emit GameCreated(gameId, msg.sender, address(token), commitDeadline, revealDeadline);
     }

@@ -8,13 +8,8 @@ import { privateKeyToAccount } from "viem/accounts";
 import { GEOBETS_GAME_ADDRESS, GEO_TOKEN_ADDRESS, geoBetsGameAbi } from "@/lib/contracts";
 import { createGameSchema } from "@/lib/validation";
 
-// Server deployer key to commit solution; DO NOT expose to client
-const SERVER_PK = (process.env.SERVER_PRIVATE_KEY || "0x") as `0x${string}`;
-const account = privateKeyToAccount(SERVER_PK);
-
-const transport = http(process.env.BASE_SEPOLIA_RPC_HTTP);
-const client = createWalletClient({ account, chain: baseSepolia, transport });
-const pub = createPublicClient({ chain: baseSepolia, transport });
+// Note: Avoid constructing wallet/clients at module load to prevent build-time failures
+// when env vars are missing. Initialize inside the handler instead.
 
 export async function POST(req: NextRequest) {
   if (process.env.SERVER_API_KEY) {
@@ -23,13 +18,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
   }
-  let body: any;
+  let body: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid_json" }, { status: 400 }); }
   const parsed = createGameSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "bad_request", issues: parsed.error.issues }, { status: 400 });
   const { imageId, commitMinutes = 15, revealMinutes = 30 } = parsed.data;
   const [img] = await db.select().from(images).where(eq(images.id, imageId)).limit(1);
   if (!img) return NextResponse.json({ error: "image not found" }, { status: 404 });
+
+  // Initialize signer and clients from env
+  const envPk = process.env.SERVER_PRIVATE_KEY || "";
+  const pk = (envPk.startsWith("0x") ? envPk : envPk ? `0x${envPk}` : "") as `0x${string}`;
+  const rpcUrl = process.env.BASE_SEPOLIA_RPC_HTTP;
+  if (!pk || pk.length !== 66) {
+    return NextResponse.json({ error: "server_misconfigured", reason: "invalid SERVER_PRIVATE_KEY" }, { status: 500 });
+  }
+  if (!rpcUrl) {
+    return NextResponse.json({ error: "server_misconfigured", reason: "missing BASE_SEPOLIA_RPC_HTTP" }, { status: 500 });
+  }
+  let account;
+  try {
+    account = privateKeyToAccount(pk);
+  } catch {
+    return NextResponse.json({ error: "server_misconfigured", reason: "failed_to_parse_private_key" }, { status: 500 });
+  }
+  const transport = http(rpcUrl);
+  const client = createWalletClient({ account, chain: baseSepolia, transport });
+  const pub = createPublicClient({ chain: baseSepolia, transport });
 
   // Generate server secret
   const random = crypto.getRandomValues(new Uint8Array(32));

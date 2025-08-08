@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { GuessPanel } from "@/components/GuessPanel";
 import { useGameStore } from "@/store/game";
 import { Countdown } from "@/components/Countdown";
+import Image from "next/image";
 
 export default function ImageGamePage() {
   const params = useParams<{ id: string }>();
@@ -36,7 +37,7 @@ export default function ImageGamePage() {
 
   return (
     <main className="p-6 grid gap-6">
-      <img src={img.url} alt={img.id} className="w-full max-h-[420px] object-contain bg-white rounded border" />
+      <Image src={img.url} alt={img.id} className="w-full max-h-[420px] object-contain bg-white rounded border" />
       {games.length > 1 && (
         <div className="flex flex-wrap gap-2 text-sm">
           {games.map(g => (
