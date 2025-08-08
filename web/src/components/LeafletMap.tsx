@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { MapContainer, TileLayer, Marker, useMapEvents, type MapContainerProps, type MarkerProps } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, useMapEvents} from "react-leaflet";
 import L, { type DivIcon } from "leaflet";
 import "leaflet/dist/leaflet.css";
 
