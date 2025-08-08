@@ -7,8 +7,6 @@ script = "script"
 out = "out"
 libs = ["lib"]
 
-eth_rpc_url = "${RPC_URL}"
-
 [rpc_endpoints]
 base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
 

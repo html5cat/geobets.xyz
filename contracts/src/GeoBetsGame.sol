@@ -31,14 +31,13 @@ contract GeoBetsGame is Ownable {
     }
 
     struct PlayerBet {
-        // Commit hash: keccak256(abi.encode(latE6, lonE6, confidenceBps, salt))
+        // Commit hash: keccak256(abi.encode(latE6, lonE6, salt))
         bytes32 commit;
         uint96 amount;
         bool revealed;
         // Revealed data cached for settlement
         int32 latE6;
         int32 lonE6;
-        uint16 confidenceBps; // 0 - 10000 (basis points)
     }
 
     // gameId => Game
@@ -50,9 +49,10 @@ contract GeoBetsGame is Ownable {
 
     event GameCreated(uint256 indexed gameId, address indexed host, address token, uint64 commitDeadline, uint64 revealDeadline);
     event PlayerCommitted(uint256 indexed gameId, address indexed player, uint256 amount);
-    event PlayerRevealed(uint256 indexed gameId, address indexed player, int32 latE6, int32 lonE6, uint16 confidenceBps);
+    event PlayerRevealed(uint256 indexed gameId, address indexed player, int32 latE6, int32 lonE6);
     event SolutionRevealed(uint256 indexed gameId, int32 latE6, int32 lonE6);
     event Settled(uint256 indexed gameId);
+    event SettledWithShares(uint256 indexed gameId, address indexed player, uint256 share, uint256 amount);
 
     constructor(address owner_) Ownable(owner_) {}
 
@@ -110,72 +110,40 @@ contract GeoBetsGame is Ownable {
         emit SolutionRevealed(gameId, latE6, lonE6);
     }
 
-    // Player reveals their guess and confidence
-    function revealGuess(uint256 gameId, int32 latE6, int32 lonE6, uint16 confidenceBps, bytes32 salt) external {
+    // Player reveals their guess
+    function revealGuess(uint256 gameId, int32 latE6, int32 lonE6, bytes32 salt) external {
         Game storage g = games[gameId];
         require(block.timestamp >= g.commitDeadline, "commit not over");
         require(block.timestamp <= g.revealDeadline, "reveal over");
         PlayerBet storage b = bets[gameId][msg.sender];
         require(b.commit != bytes32(0), "no commit");
         require(!b.revealed, "already revealed");
-        require(confidenceBps <= 10000, "bad conf");
-        require(keccak256(abi.encode(latE6, lonE6, confidenceBps, salt)) == b.commit, "commit mismatch");
+        require(keccak256(abi.encode(latE6, lonE6, salt)) == b.commit, "commit mismatch");
 
         b.revealed = true;
         b.latE6 = latE6;
         b.lonE6 = lonE6;
-        b.confidenceBps = confidenceBps;
-        emit PlayerRevealed(gameId, msg.sender, latE6, lonE6, confidenceBps);
+        emit PlayerRevealed(gameId, msg.sender, latE6, lonE6);
     }
-
-    // Approximate distance using a simple equirectangular on degrees without cosine scaling for longitude.
-    // Good enough for game payouts; returns meters. Inputs are degrees scaled by 1e6.
-    function distanceMeters(int32 lat1E6, int32 lon1E6, int32 lat2E6, int32 lon2E6) public pure returns (uint256) {
-        int256 dLatE6 = int256(int64(lat2E6)) - int256(int64(lat1E6));
-        int256 dLonE6 = int256(int64(lon2E6)) - int256(int64(lon1E6));
-        // meters per degree ~ 111,320
-        int256 metersPerDeg = 111_320;
-        int256 dLatM = (dLatE6 * metersPerDeg) / 1e6;
-        int256 dLonM = (dLonE6 * metersPerDeg) / 1e6; // ignores cos(latitude)
-        uint256 distSquared = uint256((dLatM * dLatM) + (dLonM * dLonM));
-        return _sqrt(distSquared);
-    }
-
-    function _sqrt(uint256 x) internal pure returns (uint256 y) {
-        if (x == 0) return 0;
-        uint256 z = (x + 1) / 2;
-        y = x;
-        while (z < y) {
-            y = z;
-            z = (x / z + z) / 2;
-        }
-    }
-
-    // Simple payout curve: closer distance gets higher multiplier up to 2x, fades to 0x beyond 2000km.
-    // confidenceBps increases stake linearly.
-    function payoutMultiplierBps(uint256 distanceM) public pure returns (uint16) {
-        // 0m => 20000 bps (2.0x), 2000km => 0 bps
-        if (distanceM >= 2_000_000) return 0;
-        uint256 bps = 20000 - (distanceM * 20000) / 2_000_000;
-        return uint16(bps);
-    }
-
-    // Anyone can settle after reveal window; distributes escrow proportionally by multipliers among revealed players.
-    function settle(uint256 gameId, address[] calldata players) external {
+    
+    // Off-chain calculation: distribute escrow according to provided shares (weights), proportional split.
+    // Host or owner can settle after reveal window.
+    function settleWithShares(uint256 gameId, address[] calldata players, uint256[] calldata shares) external {
         Game storage g = games[gameId];
         require(block.timestamp > g.revealDeadline, "not ended");
         require(g.solutionRevealed, "no solution");
+        require(msg.sender == g.host || msg.sender == owner(), "not host");
+        require(players.length == shares.length, "len mismatch");
 
         uint256 totalWeighted;
-        uint256[] memory weights = new uint256[](players.length);
+        uint256 maxWeight;
+        uint256 maxIdx;
         for (uint256 i = 0; i < players.length; i++) {
             PlayerBet storage b = bets[gameId][players[i]];
             if (!b.revealed || b.amount == 0) continue;
-            uint256 d = distanceMeters(b.latE6, b.lonE6, g.solutionLatE6, g.solutionLonE6);
-            uint256 mulBps = payoutMultiplierBps(d);
-            uint256 weight = (uint256(b.amount) * mulBps * b.confidenceBps) / 1e4; // scale by bps
-            weights[i] = weight;
+            uint256 weight = shares[i];
             totalWeighted += weight;
+            if (weight > maxWeight) { maxWeight = weight; maxIdx = i; }
         }
 
         uint256 escrow = g.totalEscrow;
@@ -188,11 +156,19 @@ contract GeoBetsGame is Ownable {
             return;
         }
 
+        uint256 distributed;
         for (uint256 i = 0; i < players.length; i++) {
-            uint256 weight = weights[i];
+            uint256 weight = shares[i];
             if (weight == 0) continue;
-            uint256 share = (escrow * weight) / totalWeighted;
-            g.token.safeTransfer(players[i], share);
+            uint256 amount = (escrow * weight) / totalWeighted;
+            if (amount == 0) continue;
+            g.token.safeTransfer(players[i], amount);
+            distributed += amount;
+            emit SettledWithShares(gameId, players[i], weight, amount);
+        }
+        // Distribute any dust remainder to the largest-weight player to ensure full escrow payout
+        if (escrow > distributed && maxWeight > 0) {
+            g.token.safeTransfer(players[maxIdx], escrow - distributed);
         }
         emit Settled(gameId);
     }

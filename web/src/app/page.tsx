@@ -1,5 +1,5 @@
 import { ConnectWallet } from "@/components/ConnectWallet";
-import { GuessPanel } from "@/components/GuessPanel";
+import { ImageGrid } from "@/components/ImageGrid";
 
 export default function Home() {
   return (
@@ -8,7 +8,7 @@ export default function Home() {
         <h1 className="text-2xl font-semibold">GeoBets.xyz</h1>
         <ConnectWallet />
       </div>
-      <GuessPanel />
+      <ImageGrid />
       <footer className="text-sm text-neutral-500">
         Built with Next.js, Wagmi, Viem, and Porto. Deploy contracts with Foundry.
       </footer>
