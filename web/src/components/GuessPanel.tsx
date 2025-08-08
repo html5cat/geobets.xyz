@@ -26,6 +26,12 @@ export function GuessPanel() {
     functionName: "balanceOf",
     args: address ? [address] : undefined,
   });
+  const { data: allowance } = useReadContract({
+    address: GEO_TOKEN_ADDRESS,
+    abi: geoTokenAbi,
+    functionName: "allowance",
+    args: address ? [address, GEOBETS_GAME_ADDRESS] : undefined as any,
+  });
   // const decimals = 18n;
   const { writeContract, writeContractAsync, data: txHash } = useWriteContract();
   const { isLoading: isPendingTx } = useWaitForTransactionReceipt({ hash: txHash });
@@ -49,7 +55,17 @@ export function GuessPanel() {
       <div className="flex items-center gap-4">
         <input className="border rounded px-2 py-1 w-40" placeholder="Amount GEO" value={amount} onChange={(e) => setAmount(e.target.value)} />
         <button className="px-3 py-1 border rounded" onClick={() => writeContract({ address: GEO_TOKEN_ADDRESS, abi: geoTokenAbi, functionName: "claim" })}>Claim GEO</button>
-        <div className="text-sm text-neutral-600">Balance: {balance ? Number(balance) / 1e18 : 0}</div>
+        <div className="text-sm text-neutral-600">Bal: {balance ? Number(balance) / 1e18 : 0}</div>
+        {(() => {
+          const needed = Number(amount || '0');
+          const allowed = allowance ? Number(allowance) / 1e18 : 0;
+          if (needed > 0 && allowed < needed) {
+            return (
+              <button className="px-3 py-1 border rounded" onClick={() => writeContract({ address: GEO_TOKEN_ADDRESS, abi: geoTokenAbi, functionName: 'approve', args: [GEOBETS_GAME_ADDRESS, BigInt(1e24)] })}>Approve</button>
+            );
+          }
+          return null;
+        })()}
       </div>
       <div className="flex gap-2">
         <button
@@ -86,7 +102,7 @@ export function GuessPanel() {
         <button
           className="px-4 py-2 border rounded"
           disabled={!canSubmit || !salt || isPendingTx}
-          onClick={() => {
+          onClick={async () => {
             if (lat == null || lon == null || !salt) return;
             writeContract({
               address: GEOBETS_GAME_ADDRESS,
@@ -94,6 +110,10 @@ export function GuessPanel() {
               functionName: "revealGuess",
               args: [BigInt(gameId), Math.trunc(lat * 1e6), Math.trunc(lon * 1e6), salt as `0x${string}`],
             });
+            // Persist reveal metadata off-chain
+            try {
+              await fetch('/api/bets', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ gameId, player: address, latE6: Math.trunc(lat * 1e6), lonE6: Math.trunc(lon * 1e6) }) });
+            } catch {}
           }}
         >
           Reveal Guess

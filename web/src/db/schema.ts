@@ -26,6 +26,7 @@ export const games = pgTable("games", {
   solutionLatE6: integer("solution_lat_e6").notNull(),
   solutionLonE6: integer("solution_lon_e6").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  settledAt: timestamp("settled_at", { withTimezone: true }),
 });
 
 export const bets = pgTable("bets", {

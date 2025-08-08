@@ -1,25 +1,42 @@
 "use client";
+import { useAccount } from "wagmi";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 
-import { useAccount, useReadContract, useWriteContract } from "wagmi";
-import { GEO_TOKEN_ADDRESS, geoTokenAbi } from "@/lib/contracts";
+type Bet = { gameId: number; player: string; amountWei: string; commitTx?: string; revealTx?: string; revealedLatE6?: number; revealedLonE6?: number; createdAt?: string };
 
 export default function ProfilePage() {
   const { address } = useAccount();
-  const { data: balance } = useReadContract({ address: GEO_TOKEN_ADDRESS, abi: geoTokenAbi, functionName: "balanceOf", args: address ? [address] : undefined });
-  const { writeContract } = useWriteContract();
+  const [bets, setBets] = useState<Bet[]>([]);
+  useEffect(()=> {
+    if (!address) return;
+    fetch(`/api/bets?player=${address}`).then(r=>r.json()).then(d=> setBets(d.bets || []));
+  }, [address]);
 
+  if (!address) return <div className="p-6">Connect wallet to view history.</div>;
   return (
     <main className="p-6 grid gap-6">
-      <h2 className="text-xl font-semibold">Profile</h2>
-      <div className="grid gap-2">
-        <div>Address: {address || "(not connected)"}</div>
-        <div>GEO Balance: {balance ? Number(balance) / 1e18 : 0}</div>
-        <button className="px-3 py-1 border rounded w-fit" onClick={() => writeContract({ address: GEO_TOKEN_ADDRESS, abi: geoTokenAbi, functionName: "claim" })}>Claim GEO</button>
-      </div>
-      <div>
-        <h3 className="font-medium">Betting History</h3>
-        <div className="text-sm text-neutral-500">Coming soon</div>
-      </div>
+      <h1 className="text-xl font-semibold">Your Bets</h1>
+      <table className="text-sm border-collapse">
+        <thead>
+          <tr className="text-left border-b"><th className="pr-4 py-1">Game</th><th className="pr-4">Amount GEO</th><th className="pr-4">Commit</th><th className="pr-4">Reveal</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {bets.map(b => {
+            const amount = Number(b.amountWei) / 1e18;
+            const status = b.revealTx ? 'Revealed' : 'Committed';
+            return (
+              <tr key={b.gameId+':'+b.player} className="border-b">
+                <td className="pr-4 py-1">{b.gameId}</td>
+                <td className="pr-4">{amount}</td>
+                <td className="pr-4">{b.commitTx ? <Link className="underline" href={`https://sepolia.basescan.org/tx/${b.commitTx}`}>tx</Link> : '-'}</td>
+                <td className="pr-4">{b.revealTx ? <Link className="underline" href={`https://sepolia.basescan.org/tx/${b.revealTx}`}>tx</Link> : '-'}</td>
+                <td>{status}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </main>
   );
 }

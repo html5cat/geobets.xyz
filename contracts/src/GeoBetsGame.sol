@@ -28,6 +28,8 @@ contract GeoBetsGame is Ownable {
         uint256 totalEscrow;
         // Creator/host who can trigger settlement after reveal window
         address host;
+    // Number of participants (committed players)
+    uint32 participantCount;
     }
 
     struct PlayerBet {
@@ -49,6 +51,8 @@ contract GeoBetsGame is Ownable {
 
     event GameCreated(uint256 indexed gameId, address indexed host, address token, uint64 commitDeadline, uint64 revealDeadline);
     event PlayerCommitted(uint256 indexed gameId, address indexed player, uint256 amount);
+    /// @notice Extended commit event with participant count & total escrow for easier indexing
+    event PlayerCommittedStats(uint256 indexed gameId, uint32 participantCount, uint256 totalEscrow);
     event PlayerRevealed(uint256 indexed gameId, address indexed player, int32 latE6, int32 lonE6);
     event SolutionRevealed(uint256 indexed gameId, int32 latE6, int32 lonE6);
     event Settled(uint256 indexed gameId);
@@ -91,8 +95,10 @@ contract GeoBetsGame is Ownable {
         bets[gameId][msg.sender].amount = amount;
 
         g.totalEscrow += amount;
+    unchecked { g.participantCount += 1; }
         g.token.safeTransferFrom(msg.sender, address(this), amount);
         emit PlayerCommitted(gameId, msg.sender, amount);
+    emit PlayerCommittedStats(gameId, g.participantCount, g.totalEscrow);
     }
 
     // Host reveals the solution coordinates with a secret proving the commit

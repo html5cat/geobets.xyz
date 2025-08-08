@@ -6,6 +6,7 @@ import { createWalletClient, createPublicClient, http, encodeAbiParameters, kecc
 import { baseSepolia } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 import { GEOBETS_GAME_ADDRESS, GEO_TOKEN_ADDRESS, geoBetsGameAbi } from "@/lib/contracts";
+import { createGameSchema } from "@/lib/validation";
 
 // Server deployer key to commit solution; DO NOT expose to client
 const SERVER_PK = (process.env.SERVER_PRIVATE_KEY || "0x") as `0x${string}`;
@@ -16,7 +17,17 @@ const client = createWalletClient({ account, chain: baseSepolia, transport });
 const pub = createPublicClient({ chain: baseSepolia, transport });
 
 export async function POST(req: NextRequest) {
-  const { imageId, commitMinutes = 15, revealMinutes = 30 } = await req.json();
+  if (process.env.SERVER_API_KEY) {
+    const key = req.headers.get("x-server-key");
+    if (key !== process.env.SERVER_API_KEY) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+  }
+  let body: any;
+  try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid_json" }, { status: 400 }); }
+  const parsed = createGameSchema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: "bad_request", issues: parsed.error.issues }, { status: 400 });
+  const { imageId, commitMinutes = 15, revealMinutes = 30 } = parsed.data;
   const [img] = await db.select().from(images).where(eq(images.id, imageId)).limit(1);
   if (!img) return NextResponse.json({ error: "image not found" }, { status: 404 });
 
