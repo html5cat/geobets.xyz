@@ -12,6 +12,7 @@ type Props = {
 
 function ClickCapture({ onPick }: { onPick: Props["onPick"] }) {
   useMapEvents({
+// @ts-ignore
     click(e: any) {
       onPick({ lat: e.latlng.lat, lon: e.latlng.lng });
     },
